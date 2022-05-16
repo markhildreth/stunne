@@ -6,6 +6,12 @@ static BINDING_REQUEST: [u8; 2] = [0x00, 0x01];
 /// uses rfc5389, rather than the outdated rfc3489.
 static MAGIC_COOKIE: [u8; 4] = [0x21, 0x12, 0xA4, 0x42];
 
+const STUN_HEADER_BYTES: usize = 20;
+const MESSAGE_TYPE_BYTES: usize = 2;
+const MESSAGE_LENGTH_BYTES: usize = 2;
+const MAGIC_COOKIE_BYTES: usize = 4;
+const TRANSACTION_ID_BYTES: usize = 12;
+
 /// The class for a given STUN message.
 #[derive(Debug)]
 pub enum StunClass {
@@ -62,15 +68,14 @@ pub struct StunHeader {
     pub method: u16,
     pub length: u16,
     pub message_type: u16,
+    pub transaction_id: u128,
 }
-
-const STUN_HEADER_SIZE: usize = 20;
 
 impl StunHeader {
     // NOTE: This bit manipulation was a quick first attempt. More performant manipulations
     // are likely.
     pub fn from_bytes(buf: &[u8]) -> Result<Self, HeaderParseError> {
-        if buf.len() < STUN_HEADER_SIZE {
+        if buf.len() < STUN_HEADER_BYTES {
             return Err(HeaderParseError::InvalidSize);
         }
 
@@ -82,9 +87,10 @@ impl StunHeader {
             return Err(HeaderParseError::InvalidMagicCookie);
         }
 
-        let (message_type_bytes, rest) = buf.split_at(std::mem::size_of::<u16>());
-        let (size_bytes, rest) = rest.split_at(std::mem::size_of::<u16>());
-        let (_magic_bytes, _rest) = rest.split_at(std::mem::size_of::<u16>());
+        let (message_type_bytes, rest) = buf.split_at(MESSAGE_TYPE_BYTES);
+        let (message_length_bytes, rest) = rest.split_at(MESSAGE_LENGTH_BYTES);
+        let (_magic_bytes, rest) = rest.split_at(MAGIC_COOKIE_BYTES);
+        let (transaction_id_bytes, _rest) = rest.split_at(TRANSACTION_ID_BYTES);
 
         // See RFC notes re: backwards compatability with RFC 3489. The message type
         // is made up of 11 bits, from 2-15, skipping 7 and 11. Bits 7 and 11 are what
@@ -110,13 +116,18 @@ impl StunHeader {
         let message_type =
             message_type_first_bits | message_type_second_bits | message_type_third_bits;
 
-        let length = u16::from_be_bytes(size_bytes.try_into().unwrap());
+        let length = u16::from_be_bytes(message_length_bytes.try_into().unwrap());
+
+        let mut transaction_id_buf = [0u8; 16];
+        transaction_id_buf[4..16].copy_from_slice(transaction_id_bytes);
+        let transaction_id = u128::from_be_bytes(transaction_id_buf.try_into().unwrap());
 
         Ok(StunHeader {
             method: 0,
             length,
             class,
             message_type,
+            transaction_id,
         })
     }
 }
@@ -200,6 +211,7 @@ mod tests {
         assert!(matches!(header.class, StunClass::Request));
         assert_eq!(header.method, 0);
         assert_eq!(header.length, 0);
+        assert_eq!(header.transaction_id, 0);
     }
 
     #[test]
@@ -278,5 +290,28 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(header.message_type, 0b0000_0111_1101_1101);
+    }
+
+    #[test]
+    fn test_transaction_id() {
+        #[rustfmt::skip]
+        let header = StunHeader::from_bytes(&[
+            0b0001_1110, 0b1010_1101, // Zero-padding & Message Type
+            0, 0, // Message Length
+            0x21, 0x12, 0xA4, 0x42, // Cookie
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, // Transaction ID
+        ])
+        .unwrap();
+        assert_eq!(header.transaction_id, 3);
+
+        #[rustfmt::skip]
+        let header = StunHeader::from_bytes(&[
+            0b0001_1110, 0b1010_1101, // Zero-padding & Message Type
+            0, 0, // Message Length
+            0x21, 0x12, 0xA4, 0x42, // Cookie
+            1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Transaction ID
+        ])
+        .unwrap();
+        assert_eq!(header.transaction_id, 0x010000000000000000000000);
     }
 }
