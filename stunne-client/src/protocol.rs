@@ -54,6 +54,7 @@ pub struct StunHeader {
     pub class: StunClass,
     pub method: u16,
     pub length: u16,
+    pub message_type: u16,
 }
 
 const STUN_HEADER_SIZE: usize = 20;
@@ -64,16 +65,44 @@ impl StunHeader {
             return Err(HeaderParseError::InvalidSize);
         }
 
-        let (method_bytes, rest) = buf.split_at(std::mem::size_of::<u16>());
+        let (message_type_bytes, rest) = buf.split_at(std::mem::size_of::<u16>());
         let (size_bytes, rest) = rest.split_at(std::mem::size_of::<u16>());
-        let (cookie_bytes, rest) = rest.split_at(std::mem::size_of::<u16>());
-        let method = u16::from_be_bytes(method_bytes.try_into().unwrap());
+        let (_magic_bytes, _rest) = rest.split_at(std::mem::size_of::<u16>());
+
+        // See RFC notes re: backwards compatability with RFC 3489. The message type
+        // is made up of 11 bits, from 2-15, skipping 7 and 11. Bits 7 and 11 are what
+        // make up the class. Thus, strange bit manipulation must be done to convert these.
+        // Thus, some strange bit manipulation must be done.
+        let message_type = u16::from_be_bytes(message_type_bytes.try_into().unwrap());
+
+        // NOTE: This bit manipulation was a quick first attempt. More performant manipulations
+        // are likely.
+        let class_bit_one = (message_type & 0b00000000100000000) >> 7;
+        let class_bit_two = (message_type & 0b00000000000010000) >> 4;
+        let class = match class_bit_one | class_bit_two {
+            0b00 => StunClass::Request,
+            0b01 => StunClass::Indication,
+            0b10 => StunClass::SuccessResponse,
+            0b11 => StunClass::ErrorResponse,
+            // TODO: Proper error handling
+            _ => {
+                todo!()
+            }
+        };
+
+        let message_type_first_bits = message_type & 0b0000000000001111;
+        let message_type_second_bits = (message_type & 0b0000000011100000) >> 1;
+        let message_type_third_bits = (message_type & 0b0011111000000000) >> 2;
+        let message_type =
+            message_type_first_bits | message_type_second_bits | message_type_third_bits;
+
         let length = u16::from_be_bytes(size_bytes.try_into().unwrap());
 
         Ok(StunHeader {
             method: 0,
             length,
-            class: StunClass::Request,
+            class,
+            message_type,
         })
     }
 }
@@ -112,5 +141,65 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(header.length, 32769);
+    }
+
+    #[test]
+    fn test_class_indication() {
+        let header = StunHeader::from_bytes(&[
+            0b00000000, 0b00010000, // Zero-padding & Message Type
+            0, 0, // Message Length
+            0, 0, 0, 0, // Cookie
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Transaction ID
+        ])
+        .unwrap();
+        assert!(matches!(header.class, StunClass::Indication));
+    }
+
+    #[test]
+    fn test_class_success_response() {
+        let header = StunHeader::from_bytes(&[
+            0b00000001, 0b00000000, // Zero-padding & Message Type
+            0, 0, // Message Length
+            0, 0, 0, 0, // Cookie
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Transaction ID
+        ])
+        .unwrap();
+        assert!(matches!(header.class, StunClass::SuccessResponse));
+    }
+
+    #[test]
+    fn test_class_error_response() {
+        let header = StunHeader::from_bytes(&[
+            0b00000001, 0b00010000, // Zero-padding & Message Type
+            0, 0, // Message Length
+            0, 0, 0, 0, // Cookie
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Transaction ID
+        ])
+        .unwrap();
+        assert!(matches!(header.class, StunClass::ErrorResponse));
+    }
+
+    #[test]
+    fn test_max_message_type() {
+        let header = StunHeader::from_bytes(&[
+            0b00111110, 0b11101111, // Zero-padding & Message Type
+            0, 0, // Message Length
+            0, 0, 0, 0, // Cookie
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Transaction ID
+        ])
+        .unwrap();
+        assert_eq!(header.message_type, 0b0000111111111111);
+    }
+
+    #[test]
+    fn test_message_type() {
+        let header = StunHeader::from_bytes(&[
+            0b00011110, 0b10101101, // Zero-padding & Message Type
+            0, 0, // Message Length
+            0, 0, 0, 0, // Cookie
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // Transaction ID
+        ])
+        .unwrap();
+        assert_eq!(header.message_type, 0b0000011111011101);
     }
 }
