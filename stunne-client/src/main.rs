@@ -17,7 +17,7 @@ fn main() -> std::io::Result<()> {
     let mut incoming_buf = [0; 1024];
     let (amt, _src) = socket.recv_from(&mut incoming_buf)?;
     println!("Received {} bytes: {:02X?}", amt, incoming_buf);
-    let header = StunHeader::from_bytes(&incoming_buf);
-    println!("Header: {:?}", header);
+    let msg = StunMessage::from_bytes(&incoming_buf);
+    println!("Message: {:?}", msg);
     Ok(())
 }
