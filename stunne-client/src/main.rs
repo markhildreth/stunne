@@ -1,9 +1,7 @@
-mod protocol;
-
-use crate::protocol::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use std::net::UdpSocket;
+use stunne_protocol::*;
 
 fn main() -> std::io::Result<()> {
     // Cryptographically-safe RNG
@@ -16,9 +14,9 @@ fn main() -> std::io::Result<()> {
     socket.send(req.bytes())?;
 
     let mut incoming_buf = [0; 1024];
-    let (amt, _src) = socket.recv_from(&mut incoming_buf)?;
-    println!("Received {} bytes: {:02X?}", amt, incoming_buf);
-    let (header, _remaining_bytes) = StunHeader::from_bytes(&incoming_buf).unwrap();
-    println!("Header: {:?}", header);
+    let amt = socket.recv(&mut incoming_buf)?;
+    println!("Received {} bytes: {:02X?}", amt, &incoming_buf[0..amt]);
+    let (header, _remaining_bytes) = StunHeader::from_bytes(&incoming_buf[0..amt]).unwrap();
+    println!("Header: {:#?}", header);
     Ok(())
 }
