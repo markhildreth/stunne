@@ -1,7 +1,9 @@
 use rand::prelude::*;
 
+mod attributes;
 mod header;
 
+pub use attributes::StunAttributeIterator;
 pub use header::StunHeader;
 
 /// The class for a given STUN message.

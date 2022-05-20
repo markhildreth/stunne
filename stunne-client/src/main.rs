@@ -16,7 +16,13 @@ fn main() -> std::io::Result<()> {
     let mut incoming_buf = [0; 1024];
     let amt = socket.recv(&mut incoming_buf)?;
     println!("Received {} bytes: {:02X?}", amt, &incoming_buf[0..amt]);
-    let (header, _remaining_bytes) = StunHeader::from_bytes(&incoming_buf[0..amt]).unwrap();
+    let (header, remaining_bytes) = StunHeader::from_bytes(&incoming_buf[0..amt]).unwrap();
+    let iter = StunAttributeIterator::from_bytes(&remaining_bytes);
+
     println!("Header: {:#?}", header);
+    for attribute in iter {
+        println!("Attribute: {:#?}", attribute);
+    }
+
     Ok(())
 }
