@@ -5,6 +5,7 @@ This is a pet project of mine to implement the STUN protocol in pure Rust.
 * Implement the deserializing of individual attributes from iterator.
 * Implement the deserializing of an error response.
 * Implement the deserializing of binary into a binding request.
+* Implement Fused iterator trait for attribute iterator.
 
 * Implement the serializing of address into XOR-MAPPED blah blah)
 * Implement the serializing of a binding request into binary. 

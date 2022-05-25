@@ -1,6 +1,8 @@
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
 #[derive(Debug)]
 pub struct StunAttribute<'a> {
-    pub r#type: u16,
+    pub attribute_type: u16,
     pub data: &'a [u8],
 }
 
@@ -39,7 +41,7 @@ impl<'a> Iterator for StunAttributeIterator<'a> {
         let type_bytes = &self.data[0..=1];
         let length_bytes = &self.data[2..=3];
 
-        let r#type = u16::from_be_bytes(type_bytes.try_into().unwrap());
+        let attribute_type = u16::from_be_bytes(type_bytes.try_into().unwrap());
         let length: usize = u16::from_be_bytes(length_bytes.try_into().unwrap()).into();
         let next_attribute_byte = ATTRIBUTE_TYPE_LENGTH_BYTES + length;
 
@@ -51,7 +53,10 @@ impl<'a> Iterator for StunAttributeIterator<'a> {
         let data = &self.data[ATTRIBUTE_TYPE_LENGTH_BYTES..next_attribute_byte];
         self.data = &self.data[next_attribute_byte..];
 
-        return Some(Ok(StunAttribute { r#type, data }));
+        return Some(Ok(StunAttribute {
+            attribute_type,
+            data,
+        }));
     }
 }
 
@@ -59,6 +64,17 @@ impl<'a> StunAttributeIterator<'a> {
     pub fn from_bytes(data: &'a [u8]) -> Self {
         return Self { data };
     }
+}
+
+pub fn parse_mapped_address(bytes: &[u8]) -> SocketAddr {
+    let port = u16::from_be_bytes(bytes[2..=3].try_into().unwrap());
+    let ip_addr = match bytes[1] {
+        0x01 => IpAddr::from(TryInto::<[u8; 4]>::try_into(&bytes[4..=7]).unwrap()),
+        //0x02 => IpAddr::from(TryInto::<[u8; 16]>::try_into(&bytes[4..=19]).unwrap()),
+        _ => unreachable!(),
+    };
+
+    SocketAddr::new(ip_addr, port)
 }
 
 #[cfg(test)]
@@ -87,7 +103,7 @@ mod tests {
         assert!(matches!(
             first,
             Some(Ok(StunAttribute {
-                r#type: 0x0105,
+                attribute_type: 0x0105,
                 data: &[1, 2, 3, 4]
             }))
         ));
@@ -110,7 +126,7 @@ mod tests {
         assert!(matches!(
             first,
             Some(Ok(StunAttribute {
-                r#type: 1,
+                attribute_type: 1,
                 data: &[1, 2, 3, 4, 5, 6, 7, 8]
             }))
         ));
@@ -137,7 +153,7 @@ mod tests {
         assert!(matches!(
             first,
             Some(Ok(StunAttribute {
-                r#type: 1,
+                attribute_type: 1,
                 data: &[1, 2, 3, 4]
             }))
         ));
@@ -146,7 +162,7 @@ mod tests {
         assert!(matches!(
             second,
             Some(Ok(StunAttribute {
-                r#type: 2,
+                attribute_type: 2,
                 data: &[5, 6, 7, 8, 9, 10, 11, 12]
             }))
         ));
@@ -192,5 +208,13 @@ mod tests {
 
         let second = iter.next();
         assert!(matches!(second, None));
+    }
+
+    #[test]
+    fn test_parse_mapped_attribute() {
+        assert_eq!(
+            parse_mapped_address(&[0x00, 0x01, 0x1F, 0x40, 0x7F, 0x00, 0x00, 0x01]),
+            "127.0.0.1:8000".parse().unwrap()
+        );
     }
 }

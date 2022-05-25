@@ -3,7 +3,7 @@ use rand::prelude::*;
 mod attributes;
 mod header;
 
-pub use attributes::StunAttributeIterator;
+pub use attributes::{parse_mapped_address, StunAttribute, StunAttributeIterator};
 pub use header::StunHeader;
 
 /// The class for a given STUN message.
