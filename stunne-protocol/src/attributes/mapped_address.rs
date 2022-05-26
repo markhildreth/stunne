@@ -11,17 +11,50 @@ pub enum MappedAddressParseError {
     ///
     /// RFC 5389 defines only two families: IPv4 and IPv6.
     UnknownFamily,
+
+    /// The length of the byte slice given did not match the expected number of bytes required
+    /// to parse the address. Either too few or too many bytes were given.
+    UnexpectedEndOfSlice,
 }
 
+/// Number of bytes to read the zero byte, family byte, and port.
+const MAPPED_ADDRESS_HEADER_BYTES: usize = 4;
+
+const IPV4_FAMILY: u8 = 0x01;
+const IPV6_FAMILY: u8 = 0x02;
+
+/// Number of bytes needed to store the IP address portion of an IPv4 Address
+const IPV4_BYTE_LENGTH: usize = 4;
+
+/// Number of bytes needed to store the IP address portion of an IPv6 Address
+const IPV6_BYTE_LENGTH: usize = 16;
+
 pub fn parse_mapped_address(bytes: &[u8]) -> Result<SocketAddr, MappedAddressParseError> {
-    if bytes[0] != 0 {
-        return Err(MappedAddressParseError::NonZeroFirstByte);
+    if bytes.len() < MAPPED_ADDRESS_HEADER_BYTES {
+        return Err(MappedAddressParseError::UnexpectedEndOfSlice);
     }
 
-    let port = u16::from_be_bytes(bytes[2..=3].try_into().unwrap());
-    let ip_addr = match bytes[1] {
-        0x01 => IpAddr::from(TryInto::<[u8; 4]>::try_into(&bytes[4..=7]).unwrap()),
-        0x02 => IpAddr::from(TryInto::<[u8; 16]>::try_into(&bytes[4..=19]).unwrap()),
+    let (header_bytes, address_bytes) = bytes.split_at(MAPPED_ADDRESS_HEADER_BYTES);
+    if header_bytes[0] != 0 {
+        return Err(MappedAddressParseError::NonZeroFirstByte);
+    }
+    let port = u16::from_be_bytes(header_bytes[2..=3].try_into().unwrap());
+
+    let ip_addr = match header_bytes[1] {
+        IPV4_FAMILY => {
+            if address_bytes.len() != IPV4_BYTE_LENGTH {
+                return Err(MappedAddressParseError::UnexpectedEndOfSlice);
+            }
+            let array: [u8; IPV4_BYTE_LENGTH] = address_bytes.try_into().unwrap();
+            IpAddr::from(array)
+        }
+        IPV6_FAMILY => {
+            if address_bytes.len() != IPV6_BYTE_LENGTH {
+                return Err(MappedAddressParseError::UnexpectedEndOfSlice);
+            }
+            let data: [u8; IPV6_BYTE_LENGTH] = address_bytes.try_into().unwrap();
+            IpAddr::from(data)
+        }
         _ => return Err(MappedAddressParseError::UnknownFamily),
     };
 
@@ -120,5 +153,56 @@ mod tests {
             result,
             Err(MappedAddressParseError::NonZeroFirstByte)
         ));
+    }
+
+    #[test]
+    fn test_parse_mapped_address_invalid_number_of_bytes() {
+        assert!(matches!(
+            parse_mapped_address(&[]),
+            Err(MappedAddressParseError::UnexpectedEndOfSlice)
+        ));
+
+        assert!(matches!(
+            parse_mapped_address(&[0x00]),
+            Err(MappedAddressParseError::UnexpectedEndOfSlice)
+        ));
+
+        assert!(matches!(
+            parse_mapped_address(&[0x00, 0x01]),
+            Err(MappedAddressParseError::UnexpectedEndOfSlice)
+        ));
+
+        assert!(matches!(
+            parse_mapped_address(&[0x00, 0x01, 0x00]),
+            Err(MappedAddressParseError::UnexpectedEndOfSlice)
+        ));
+
+        assert!(matches!(
+            parse_mapped_address(&[0x00, 0x01, 0x04, 0xD2]),
+            Err(MappedAddressParseError::UnexpectedEndOfSlice)
+        ));
+
+        assert!(matches!(
+            parse_mapped_address(&[0x00, 0x01, 0x04, 0xD2, 0x00]),
+            Err(MappedAddressParseError::UnexpectedEndOfSlice)
+        ));
+
+        assert!(matches!(
+            parse_mapped_address(&[0x00, 0x01, 0x04, 0xD2, 0x00, 0x00]),
+            Err(MappedAddressParseError::UnexpectedEndOfSlice)
+        ));
+
+        assert!(matches!(
+            parse_mapped_address(&[0x00, 0x01, 0x04, 0xD2, 0x00, 0x00, 0x00]),
+            Err(MappedAddressParseError::UnexpectedEndOfSlice)
+        ));
+
+        assert!(
+            // note change to IPv6
+            matches!(
+                parse_mapped_address(&[0x00, 0x02, 0x04, 0xD2, 0x00, 0x00, 0x00, 0x00]),
+                Err(MappedAddressParseError::UnexpectedEndOfSlice)
+            )
+        );
     }
 }
