@@ -1,4 +1,4 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 
 #[derive(Debug)]
 pub struct StunAttribute<'a> {
@@ -70,7 +70,7 @@ pub fn parse_mapped_address(bytes: &[u8]) -> SocketAddr {
     let port = u16::from_be_bytes(bytes[2..=3].try_into().unwrap());
     let ip_addr = match bytes[1] {
         0x01 => IpAddr::from(TryInto::<[u8; 4]>::try_into(&bytes[4..=7]).unwrap()),
-        //0x02 => IpAddr::from(TryInto::<[u8; 16]>::try_into(&bytes[4..=19]).unwrap()),
+        0x02 => IpAddr::from(TryInto::<[u8; 16]>::try_into(&bytes[4..=19]).unwrap()),
         _ => unreachable!(),
     };
 
@@ -211,10 +211,57 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_mapped_attribute() {
+    fn test_parse_mapped_address_attribute_for_ipv4() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x00, // Zeroes
+            0x01, // IPv4,
+            0x1F, 0x40, // Port 8000
+            0x7F, 0x00, 0x00, 0x01 // 127.0.0.1
+        ];
         assert_eq!(
-            parse_mapped_address(&[0x00, 0x01, 0x1F, 0x40, 0x7F, 0x00, 0x00, 0x01]),
+            parse_mapped_address(&bytes),
             "127.0.0.1:8000".parse().unwrap()
         );
+
+        #[rustfmt::skip]
+        let bytes = [
+            0x00, // Zeroes
+            0x01, // IPv4
+            0x04, 0xD2, // Port 1234
+            0x01, 0x02, 0x03, 0x04 // 1.2.3.4
+        ];
+        assert_eq!(
+            parse_mapped_address(&bytes),
+            "1.2.3.4:1234".parse().unwrap()
+        );
+    }
+
+    #[test]
+    fn test_parse_mapped_address_attribute_for_ipv6() {
+        #[rustfmt::skip]
+        let bytes = [
+            0x00, // Zeroes
+            0x02, // IPv6
+            0x04, 0xD2, // Port 1234
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+            0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
+        ];
+        assert_eq!(
+            parse_mapped_address(&bytes),
+            "[0001:0203:0405:0607:0809:0A0B:0C0D:0E0F]:1234"
+                .parse()
+                .unwrap()
+        );
+
+        #[rustfmt::skip]
+        let bytes = [
+            0x00, // Zeroes
+            0x02, // IPv6
+            0x1F, 0x40, // Port 8000
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
+        ];
+        assert_eq!(parse_mapped_address(&bytes), "[::1]:8000".parse().unwrap());
     }
 }
