@@ -9,6 +9,9 @@ const XOR_MAPPED_ADDRESS_TEXT: &str = "XOR-MAPPED-ADDRESS";
 const MAPPED_ADDRESS: u16 = 0x0001;
 const MAPPED_ADDRESS_TEXT: &str = "MAPPED-ADDRESS";
 
+const SOFTWARE: u16 = 0x8022;
+const SOFTWARE_TEXT: &str = "SOFTWARE";
+
 const UNKNOWN_TEXT: &str = "UNKNOWN";
 
 fn main() -> std::io::Result<()> {
@@ -38,6 +41,7 @@ fn main() -> std::io::Result<()> {
                 let attribute_text = match attribute_type {
                     XOR_MAPPED_ADDRESS => XOR_MAPPED_ADDRESS_TEXT,
                     MAPPED_ADDRESS => MAPPED_ADDRESS_TEXT,
+                    SOFTWARE => SOFTWARE_TEXT,
                     _ => UNKNOWN_TEXT,
                 };
 
@@ -52,6 +56,9 @@ fn main() -> std::io::Result<()> {
                     MAPPED_ADDRESS => {
                         println!("Data     : {:?}", parse_mapped_address(data));
                     }
+                    SOFTWARE => {
+                        println!("Data     : {:?}", String::from_utf8_lossy(data));
+                    }
                     _ => {
                         println!("Data     : {:?}", data);
                     }
@@ -61,6 +68,8 @@ fn main() -> std::io::Result<()> {
                 println!("Error reading attribute: {:#?}", e);
             }
         }
+
+        println!("");
     }
 
     Ok(())
