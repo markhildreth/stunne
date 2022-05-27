@@ -1,6 +1,7 @@
 mod mapped_address;
 
 pub use mapped_address::parse_mapped_address;
+pub use mapped_address::parse_xor_mapped_address;
 
 #[derive(Debug)]
 pub struct StunAttribute<'a> {

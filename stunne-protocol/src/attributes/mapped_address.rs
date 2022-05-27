@@ -1,4 +1,4 @@
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 /// Gives the reason that a MAPPED-ADDRESS attribute's value could not be parsed.
 #[derive(Debug)]
@@ -28,6 +28,10 @@ const IPV4_BYTE_LENGTH: usize = 4;
 
 /// Number of bytes needed to store the IP address portion of an IPv6 Address
 const IPV6_BYTE_LENGTH: usize = 16;
+
+/// The most significant 16 bits of the magic cookie. Used for XORing against the port.
+const MAGIC_COOKIE_MSB: u16 = 0x2112;
+const MAGIC_COOKIE_FULL: u32 = 0x2112A442;
 
 pub fn parse_mapped_address(bytes: &[u8]) -> Result<SocketAddr, MappedAddressParseError> {
     if bytes.len() < MAPPED_ADDRESS_HEADER_BYTES {
@@ -61,8 +65,31 @@ pub fn parse_mapped_address(bytes: &[u8]) -> Result<SocketAddr, MappedAddressPar
     Ok(SocketAddr::new(ip_addr, port))
 }
 
+pub fn parse_xor_mapped_address(
+    bytes: &[u8],
+    transaction_id: u128,
+) -> Result<SocketAddr, MappedAddressParseError> {
+    let addr = parse_mapped_address(bytes)?;
+    let processed_ip = match addr.ip() {
+        IpAddr::V4(ip) => {
+            let address: u32 = ip.into();
+            let new_address = address ^ MAGIC_COOKIE_FULL;
+            IpAddr::V4(Ipv4Addr::from(new_address))
+        }
+        IpAddr::V6(ip) => {
+            let address: u128 = ip.into();
+            let xor_mask: u128 = ((MAGIC_COOKIE_FULL as u128) << 96) + transaction_id;
+            let new_address: u128 = address ^ xor_mask;
+            IpAddr::V6(Ipv6Addr::from(new_address))
+        }
+    };
+    let processed_port = addr.port() ^ MAGIC_COOKIE_MSB;
+
+    Ok(SocketAddr::new(processed_ip, processed_port))
+}
+
 #[cfg(test)]
-mod tests {
+mod test_mapped_address {
     use super::*;
 
     #[test]
@@ -203,6 +230,48 @@ mod tests {
                 parse_mapped_address(&[0x00, 0x02, 0x04, 0xD2, 0x00, 0x00, 0x00, 0x00]),
                 Err(MappedAddressParseError::UnexpectedEndOfSlice)
             )
+        );
+    }
+}
+
+#[cfg(test)]
+mod test_xor_mapped_address {
+    use super::*;
+
+    #[test]
+    fn test_for_ipv4() {
+        // Transaction ID is not used for IPv4 mappings, but still a required argument as it
+        // may be needed for IPv6.
+        let transaction_id = 0x5ddc50d9f58f88fd37b31bc1;
+        #[rustfmt::skip]
+        let bytes = [
+           0x00, // Zeroes
+           0x01, // IPv4
+           0x9e, 0x57, // XOR Port of 48965
+           0x5e, 0x12, 0xa4, 0x43, //XORed IP address of 127.0.0.1
+        ];
+        assert_eq!(
+            parse_xor_mapped_address(&bytes, transaction_id).unwrap(),
+            "127.0.0.1:48965".parse().unwrap()
+        );
+    }
+
+    #[test]
+    fn test_for_ipv6() {
+        let transaction_id = 0x5ddc50d9f58f88fd37b31bc1;
+        #[rustfmt::skip]
+        let bytes = [
+            0x00, // Zeroes
+            0x02, // IPv6
+            0xbd, 0x5f, // XOR Port of 40013
+            // IP address of ::1, made from xoring magic cookie and
+            // transaction id 0x5ddc50d9f58f88fd37b31bc1.
+            0x21, 0x12, 0xa4, 0x42, 0x5d, 0xdc, 0x50, 0xd9,
+            0xf5, 0x8f, 0x88, 0xfd, 0x37, 0xb3, 0x1b, 0xc0
+        ];
+        assert_eq!(
+            parse_xor_mapped_address(&bytes, transaction_id).unwrap(),
+            "[::1]:40013".parse().unwrap()
         );
     }
 }

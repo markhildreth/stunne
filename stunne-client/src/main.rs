@@ -15,8 +15,8 @@ fn main() -> std::io::Result<()> {
     // Cryptographically-safe RNG
     let mut rng = ChaCha20Rng::from_entropy();
 
-    let socket = UdpSocket::bind("0.0.0.0:0")?;
-    socket.connect("127.0.0.1:3478")?;
+    let socket = UdpSocket::bind("[::]:0")?;
+    socket.connect("[::1]:3478")?;
 
     let req = StunRequest::new(&mut rng);
     socket.send(req.bytes())?;
@@ -44,7 +44,10 @@ fn main() -> std::io::Result<()> {
                 println!("Attribute: {:#06x?} ({})", attribute_type, attribute_text);
                 match attribute_type {
                     XOR_MAPPED_ADDRESS => {
-                        println!("Data     : {:?}", data);
+                        println!(
+                            "Data     : {:?}",
+                            parse_xor_mapped_address(data, header.transaction_id)
+                        );
                     }
                     MAPPED_ADDRESS => {
                         println!("Data     : {:?}", parse_mapped_address(data));
