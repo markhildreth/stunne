@@ -26,11 +26,11 @@ fn main() -> std::io::Result<()> {
 
     let mut incoming_buf = [0; 1024];
     let amt = socket.recv(&mut incoming_buf)?;
-    println!("Received {} bytes: {:02X?}", amt, &incoming_buf[0..amt]);
     let (header, remaining_bytes) = StunHeader::from_bytes(&incoming_buf[0..amt]).unwrap();
     let iter = StunAttributeIterator::from_bytes(&remaining_bytes);
 
     println!("Header: {:#?}", header);
+    println!("Attributes:");
     for attribute in iter {
         //println!("Attribute: {:#?}", attribute);
         match attribute {
@@ -38,29 +38,31 @@ fn main() -> std::io::Result<()> {
                 attribute_type,
                 data,
             }) => {
-                let attribute_text = match attribute_type {
-                    XOR_MAPPED_ADDRESS => XOR_MAPPED_ADDRESS_TEXT,
-                    MAPPED_ADDRESS => MAPPED_ADDRESS_TEXT,
-                    SOFTWARE => SOFTWARE_TEXT,
-                    _ => UNKNOWN_TEXT,
-                };
+                print!(
+                    "* {: <20}",
+                    match attribute_type {
+                        XOR_MAPPED_ADDRESS => XOR_MAPPED_ADDRESS_TEXT,
+                        MAPPED_ADDRESS => MAPPED_ADDRESS_TEXT,
+                        SOFTWARE => SOFTWARE_TEXT,
+                        _ => UNKNOWN_TEXT,
+                    }
+                );
 
-                println!("Attribute: {:#06x?} ({})", attribute_type, attribute_text);
                 match attribute_type {
                     XOR_MAPPED_ADDRESS => {
                         println!(
-                            "Data     : {:?}",
+                            "{:?}",
                             parse_xor_mapped_address(data, header.transaction_id)
                         );
                     }
                     MAPPED_ADDRESS => {
-                        println!("Data     : {:?}", parse_mapped_address(data));
+                        println!("{:?}", parse_mapped_address(data));
                     }
                     SOFTWARE => {
-                        println!("Data     : {:?}", String::from_utf8_lossy(data));
+                        println!("{:?}", String::from_utf8_lossy(data));
                     }
                     _ => {
-                        println!("Data     : {:?}", data);
+                        println!("{:?}", data);
                     }
                 };
             }
@@ -68,8 +70,6 @@ fn main() -> std::io::Result<()> {
                 println!("Error reading attribute: {:#?}", e);
             }
         }
-
-        println!("");
     }
 
     Ok(())
