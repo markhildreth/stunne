@@ -94,7 +94,7 @@ async fn main() {
     let (send, recv) = mpsc::channel::<()>(10);
     tokio::spawn(async move {
         sleep(Duration::from_secs(1)).await;
-        send.send(());
+        send.send(()).await.unwrap();
     });
     let result = run_session(session, recv).await;
 
