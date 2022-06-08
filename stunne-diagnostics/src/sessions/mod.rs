@@ -1,19 +1,19 @@
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 mod determine_mapping;
 
 pub(crate) use determine_mapping::DetermineMappingSession;
 
-pub(crate) enum Instructions {
-    Done,
-    Continue(Duration),
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum StunEvent {
+    Idle { now: Instant },
+    DatagramReceived,
 }
 
-pub(crate) trait StunSession {
-    type Error;
+pub(crate) trait StunSession: Sized + Copy + std::fmt::Debug {
+    type Outgoing: std::fmt::Debug;
+    type Messages: std::fmt::Debug;
 
-    fn process(&mut self, now: Instant) -> Result<Instructions, Self::Error>;
-
-    /// Process events (e.g., incoming bytes, possibly a way to signal we want the thing to exit)?
-    fn recv(&mut self);
+    fn process(self, event: StunEvent) -> (Self, Self::Outgoing, Self::Messages);
+    fn timeout(&self) -> Option<Instant>;
 }

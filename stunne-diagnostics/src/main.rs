@@ -1,30 +1,39 @@
-use crate::sessions::{DetermineMappingSession, Instructions, StunSession};
 use futures::{future::FutureExt, pin_mut, select};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::time::sleep;
 
 mod sessions;
+use sessions::{DetermineMappingSession, StunEvent, StunSession};
 
-async fn run_session<S: StunSession + core::fmt::Debug>(
-    mut sess: S,
-    mut incoming: mpsc::Receiver<()>,
-) -> Result<(), S::Error> {
+async fn run_session<S: StunSession>(sess: S, mut incoming: mpsc::Receiver<()>) {
+    let mut state = sess;
+    let mut event = StunEvent::Idle {
+        now: Instant::now(),
+    };
+
     loop {
-        let timeout = match sess.process(Instant::now()) {
-            Ok(Instructions::Done) => break Ok(()),
-            Ok(Instructions::Continue(timeout)) => timeout,
-            Err(e) => break Err(e),
-        };
+        println!("Session State: {:?}", sess);
+        println!("Event: {:?}", event);
+        let (new_state, outgoing, messages) = state.process(event);
+        println!("\tNew Session:        {:?}", outgoing);
+        println!("\tOutgoing Datagrams: {:?}", outgoing);
+        println!("\tMessages:           {:?}", messages);
 
+        let timeout_duration = match new_state.timeout() {
+            Some(instant) => instant - Instant::now(),
+            None => break,
+        };
+        let timeout_fut = sleep(timeout_duration).fuse();
         let recv_fut = incoming.recv().fuse();
-        let timeout_fut = sleep(timeout).fuse();
         pin_mut!(recv_fut, timeout_fut);
 
-        select! {
-            _ = recv_fut => sess.recv(),
-            _ = timeout_fut => {},
+        event = select! {
+            _ = recv_fut => StunEvent::DatagramReceived,
+            _ = timeout_fut => StunEvent::Idle { now: Instant::now() },
         };
+
+        state = new_state;
     }
 }
 

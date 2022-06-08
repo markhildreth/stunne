@@ -1,4 +1,4 @@
-use crate::sessions::{Instructions, StunSession};
+use crate::sessions::{StunEvent, StunSession};
 use std::time::{Duration, Instant};
 
 const TIMEOUT_SECS: Duration = Duration::from_secs(3);
@@ -11,55 +11,72 @@ pub(crate) enum DetermineMappingResult {
 }
 */
 
-#[derive(Debug)]
-pub(crate) enum DetermineMappingError {
-    InvalidTimeout,
-}
-
-#[derive(Debug)]
-pub(crate) struct DetermineMappingSession {
-    timeout: Option<Instant>,
-    received: bool,
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum DetermineMappingSession {
+    Initial,
+    FirstPacketSent { timeout_at: Instant },
+    Done,
 }
 
 impl DetermineMappingSession {
     pub(crate) fn new() -> Self {
-        Self {
-            timeout: None,
-            received: false,
-        }
+        Self::Initial
+    }
+}
+
+impl DetermineMappingSession {
+    fn no_change(self) -> (Self, OutgoingDatagrams, Messages) {
+        (self, OutgoingDatagrams::None, Messages::None)
     }
 }
 
 impl StunSession for DetermineMappingSession {
-    type Error = DetermineMappingError;
+    type Outgoing = OutgoingDatagrams;
+    type Messages = Messages;
 
-    fn process(&mut self, now: Instant) -> Result<Instructions, Self::Error> {
-        if self.received {
-            return Ok(Instructions::Done);
-        }
-
-        match self.timeout {
-            Some(t) if t <= now => Err(DetermineMappingError::InvalidTimeout),
-            Some(t) => Ok(Instructions::Continue(t - now)),
-            None => {
-                self.timeout = Some(now + TIMEOUT_SECS);
-                Ok(Instructions::Continue(TIMEOUT_SECS))
+    fn process(self, event: StunEvent) -> (Self, Self::Outgoing, Self::Messages) {
+        match (self, event) {
+            (Self::Initial, StunEvent::Idle { now }) => (
+                Self::FirstPacketSent {
+                    timeout_at: now + TIMEOUT_SECS,
+                },
+                OutgoingDatagrams::FirstAttempt,
+                Messages::None,
+            ),
+            (Self::Initial, StunEvent::DatagramReceived) => self.no_change(),
+            (Self::FirstPacketSent { timeout_at }, StunEvent::Idle { now }) if timeout_at < now => {
+                (
+                    Self::Done,
+                    OutgoingDatagrams::None,
+                    Messages::UnexpectedTimeoutError,
+                )
             }
+            (Self::FirstPacketSent { .. }, StunEvent::Idle { .. }) => self.no_change(),
+            (Self::FirstPacketSent { .. }, StunEvent::DatagramReceived { .. }) => {
+                (Self::Done, OutgoingDatagrams::None, Messages::Finished)
+            }
+            (Self::Done, _) => self.no_change(),
         }
     }
 
-    fn recv(&mut self) {
-        self.received = true;
+    fn timeout(&self) -> Option<Instant> {
+        match self {
+            Self::Initial => None,
+            Self::FirstPacketSent { timeout_at } => Some(*timeout_at),
+            Self::Done => None,
+        }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[derive(Debug)]
+pub(crate) enum OutgoingDatagrams {
+    None,
+    FirstAttempt,
+}
 
-    #[test]
-    fn test_no_response() {
-        let session = DetermineMappingSession::new();
-    }
+#[derive(Debug)]
+pub(crate) enum Messages {
+    None,
+    UnexpectedTimeoutError,
+    Finished,
 }
