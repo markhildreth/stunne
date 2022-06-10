@@ -1,53 +1,55 @@
-use futures::{future::FutureExt, pin_mut, select};
-use std::time::{Duration, Instant};
-use tokio::sync::mpsc;
-use tokio::time::sleep;
+use std::io::ErrorKind;
+use std::net::UdpSocket;
+use std::time::Instant;
 
 mod sessions;
-use sessions::{DetermineMappingSession, StunEvent, StunSession};
+use sessions::{DetermineMappingSession, StunEvent, StunSession, StunSessionStatus};
 
-async fn run_session<S: StunSession>(sess: S, mut incoming: mpsc::Receiver<()>) {
-    let mut state = sess;
+const BUF_SIZE: usize = 1024;
+
+fn main() -> std::io::Result<()> {
+    let socket = UdpSocket::bind("0.0.0.0:0")?;
+    let mut session = StunSession::new(DetermineMappingSession::default());
     let mut event = StunEvent::Idle {
         now: Instant::now(),
     };
+    let mut buf = [0; BUF_SIZE];
 
-    loop {
-        println!("Session State: {:?}", sess);
-        println!("Event: {:?}", event);
-        let (new_state, outgoing, messages) = state.process(event);
-        println!("\tNew Session:        {:?}", outgoing);
-        println!("\tOutgoing Datagrams: {:?}", outgoing);
-        println!("\tMessages:           {:?}", messages);
+    let result = loop {
+        println!("Loop Start");
+        println!("\tSession : {:?}", session);
+        println!("\tEvent   : {:?}", event);
+        let outgoing = session.process(&event);
+        println!("After Processing:");
+        println!("\tSession : {:?}", session);
+        println!("\tOutgoing: {:?}", outgoing);
 
-        let timeout_duration = match new_state.timeout() {
-            Some(instant) => instant - Instant::now(),
-            None => break,
+        // TODO: Send out outgoing
+
+        let status = session.status();
+        println!("\tStatus  : {:?}", status);
+        match status {
+            StunSessionStatus::Waiting { timeout } => {
+                socket.set_read_timeout(Some(timeout - Instant::now()))?;
+            }
+            StunSessionStatus::Complete { result } => break result,
+        }
+
+        event = match socket.recv_from(&mut buf) {
+            Ok((bytes, _src_addr)) => StunEvent::DatagramReceived {
+                bytes: &buf[0..bytes],
+            },
+            Err(e) if e.kind() == ErrorKind::WouldBlock => StunEvent::Idle {
+                now: Instant::now(),
+            },
+            Err(e) => {
+                panic!("Unknown error occurred: {:?}", e);
+            }
         };
-        let timeout_fut = sleep(timeout_duration).fuse();
-        let recv_fut = incoming.recv().fuse();
-        pin_mut!(recv_fut, timeout_fut);
 
-        event = select! {
-            _ = recv_fut => StunEvent::DatagramReceived,
-            _ = timeout_fut => StunEvent::Idle { now: Instant::now() },
-        };
-
-        state = new_state;
-    }
-}
-
-#[tokio::main]
-async fn main() {
-    let session = DetermineMappingSession::new();
-    let (send, recv) = mpsc::channel::<()>(10);
-    tokio::spawn(async move {
-        sleep(Duration::from_secs(1)).await;
-        println!("Sending through 'send'");
-        send.send(()).await.unwrap();
-    });
-    println!("Starting session");
-    let result = run_session(session, recv).await;
+        println!("");
+    };
 
     println!("Done: {:?}", result);
+    Ok(())
 }
