@@ -47,7 +47,7 @@ fn main() -> std::io::Result<()> {
             }
         };
 
-        println!("");
+        println!();
     };
 
     println!("Done: {:?}", result);
