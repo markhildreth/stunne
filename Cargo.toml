@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "stunne-protocol",
+    "examples/simple-client"
+]
