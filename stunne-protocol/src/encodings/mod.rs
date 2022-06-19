@@ -28,20 +28,15 @@ impl AttributeEncoder for &str {
     }
 }
 
+#[derive(Default)]
 pub struct Utf8Decoder;
-
-impl Default for Utf8Decoder {
-    fn default() -> Self {
-        Self {}
-    }
-}
 
 impl<'buf> AttributeDecoder<'buf> for Utf8Decoder {
     type Item = &'buf str;
     type Error = Utf8Error;
 
     fn decode(&self, buf: &'buf [u8]) -> Result<Self::Item, Self::Error> {
-        from_utf8(&buf)
+        from_utf8(buf)
     }
 }
 

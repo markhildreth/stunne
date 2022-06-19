@@ -26,7 +26,7 @@ impl MessageHeader {
         buf.extend_from_slice(&encode_message_type(self.class, self.method));
         buf.put_u16(data_length);
         buf.extend_from_slice(&MAGIC_COOKIE);
-        buf.extend_from_slice(&self.tx_id.as_ref());
+        buf.extend_from_slice(self.tx_id.as_ref());
     }
 
     /// Decodes the header from a packet. Returns information in the header, including the length

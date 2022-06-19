@@ -59,20 +59,15 @@ impl AttributeEncoder for MappedAddressEncoder {
     }
 }
 
+#[derive(Default)]
 pub struct MappedAddressDecoder;
-
-impl Default for MappedAddressDecoder {
-    fn default() -> Self {
-        Self {}
-    }
-}
 
 impl AttributeDecoder<'_> for MappedAddressDecoder {
     type Item = SocketAddr;
     type Error = MappedAddressDecodeError;
 
     fn decode(&self, buf: &[u8]) -> Result<Self::Item, Self::Error> {
-        parse_mapped_address(&buf)
+        parse_mapped_address(buf)
     }
 }
 
@@ -134,7 +129,7 @@ impl AttributeEncoder for XorMappedAddressEncoder {
                 let mut octets = ip.octets();
                 let mut mask: [u8; 16] = Default::default();
                 mask[0..4].copy_from_slice(&MAGIC_COOKIE_FULL);
-                mask[4..].copy_from_slice(&self.tx_id.as_ref());
+                mask[4..].copy_from_slice(self.tx_id.as_ref());
                 xor(&mut octets, &mask);
                 IpAddr::V6(Ipv6Addr::from(octets))
             }
@@ -172,7 +167,7 @@ impl AttributeDecoder<'_> for XorMappedAddressDecoder {
                 let mut octets = ip.octets();
                 let mut mask: [u8; 16] = Default::default();
                 mask[0..4].copy_from_slice(&MAGIC_COOKIE_FULL);
-                mask[4..].copy_from_slice(&self.tx_id.as_ref());
+                mask[4..].copy_from_slice(self.tx_id.as_ref());
                 xor(&mut octets, &mask);
                 IpAddr::V6(Ipv6Addr::from(octets))
             }

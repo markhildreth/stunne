@@ -38,7 +38,7 @@ impl<'a> Iterator for StunAttributeIterator<'a> {
             return None;
         }
 
-        if self.data.len() < ATTRIBUTE_TYPE_LENGTH_BYTES.into() {
+        if self.data.len() < ATTRIBUTE_TYPE_LENGTH_BYTES {
             self.data = &self.data[0..0];
             return Some(Err(MessageDecodeError::UnexpectedEndOfData));
         }

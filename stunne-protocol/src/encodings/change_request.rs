@@ -35,13 +35,8 @@ impl AttributeEncoder for ChangeRequest {
 
 const CHANGE_REQUEST_BYTES: usize = 4;
 
+#[derive(Default)]
 pub struct ChangeRequestDecoder;
-
-impl Default for ChangeRequestDecoder {
-    fn default() -> Self {
-        Self {}
-    }
-}
 
 impl AttributeDecoder<'_> for ChangeRequestDecoder {
     type Item = ChangeRequest;

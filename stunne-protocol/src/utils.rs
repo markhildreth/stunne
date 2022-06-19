@@ -62,9 +62,9 @@ const ALIGNMENT_BYTES: usize = 4;
 pub(crate) fn padding_for_attribute_length(length: usize) -> usize {
     let extra = length % ALIGNMENT_BYTES;
     if extra != 0 {
-        return ALIGNMENT_BYTES - extra;
+        ALIGNMENT_BYTES - extra
     } else {
-        return 0;
+        0
     }
 }
 

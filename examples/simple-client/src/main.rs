@@ -61,12 +61,12 @@ fn main() -> std::io::Result<()> {
         .expect("Timeout while waiting for response");
     let msg = StunDecoder::new(&incoming_buf[0..amt]).unwrap();
 
-    println!("");
+    println!();
     println!("## Header ##");
     println!("* Class:  {:?}", msg.class());
     println!("* Method: {:?}", msg.method());
     println!("* Tx ID:  {:?}", msg.tx_id());
-    println!("");
+    println!();
     println!("## Attributes ##");
     for attribute in msg.attributes() {
         match attribute {
