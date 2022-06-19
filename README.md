@@ -1,4 +1,7 @@
-This is a pet project of mine to implement the STUN protocol in pure Rust.
+This is a pet project of mine to implement the STUN protocol in pure Rust. The
+goal is to learn a bit about the STUN protocol while also being able to provide
+sample code for those interested. As such, this code should not be considered
+production-ready.
 
 Stun is an extensible protocol that utilizes UDP. This crate implements some of
 the basic Stun protocol, as well as hand-picked items of interest. The source
