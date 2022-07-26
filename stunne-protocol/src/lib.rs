@@ -167,7 +167,7 @@ impl TransactionId {
         Self { bytes }
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Self {
+    pub fn from_bytes(bytes: &[u8; 12]) -> Self {
         let mut buf = [0; 12];
         buf.copy_from_slice(&bytes[0..12]);
         Self { bytes: buf }

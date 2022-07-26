@@ -44,7 +44,7 @@ impl MessageHeader {
 
         let (class, method) = decode_message_type(buf[0..=1].try_into().unwrap())?;
         let length = u16::from_be_bytes(buf[2..=3].try_into().unwrap());
-        let tx_id = TransactionId::from_bytes(&buf[8..20]);
+        let tx_id = TransactionId::from_bytes(buf[8..20].try_into().unwrap());
 
         Ok((
             MessageHeader {

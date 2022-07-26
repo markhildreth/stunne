@@ -2,7 +2,6 @@
 
 * Think a bit more about how the RNG is set up for transaction ID to make it
   cryptographically random.
-* TransactionId::from_bytes should probably use a reference to array.
 
 ## Alternative to bytes
 Find another way of encoding data rather than using bytes. It seems a bit
