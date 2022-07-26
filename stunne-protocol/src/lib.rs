@@ -49,6 +49,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use encodings::AttributeEncoder;
 use errors::MessageDecodeError;
 pub use header::MessageHeader;
+use rand::distributions::{Distribution, Standard};
 
 /// Magic data that must be included in all STUN messages to clarify that the STUN message
 /// uses rfc5389, rather than the outdated rfc3489.
@@ -157,20 +158,23 @@ pub struct TransactionId {
 }
 
 impl TransactionId {
-    /// Generate a random transaction ID.
-    ///
-    /// NOTE: This currently does NOT generate an ID in a securely random way.
+    /// Generate a random transaction ID using Rand's thread_rng.
     pub fn random() -> Self {
-        // TODO: This is not gauranteed to be a securely generated random value.
-        let mut bytes = [0; 12];
-        rand::thread_rng().fill_bytes(&mut bytes);
-        Self { bytes }
+        thread_rng().gen()
     }
 
     pub fn from_bytes(bytes: &[u8; 12]) -> Self {
         let mut buf = [0; 12];
         buf.copy_from_slice(&bytes[0..12]);
         Self { bytes: buf }
+    }
+}
+
+impl Distribution<TransactionId> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TransactionId {
+        let mut bytes = [0; 12];
+        rng.fill_bytes(&mut bytes);
+        TransactionId { bytes }
     }
 }
 

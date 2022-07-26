@@ -1,8 +1,5 @@
 # TODO for stunne-protocol.
 
-* Think a bit more about how the RNG is set up for transaction ID to make it
-  cryptographically random.
-
 ## Alternative to bytes
 Find another way of encoding data rather than using bytes. It seems a bit
 overkill for this case, and makes more sense in a situation where data is being
