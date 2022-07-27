@@ -2,5 +2,5 @@
 
 members = [
     "stunne-protocol",
-    "examples/simple-client"
+    "stunne-examples",
 ]
